@@ -87,3 +87,5 @@ overly_complex_bool_expr = "allow"
 map_unwrap_or = "allow"
 # Allow collapsible else if patterns
 collapsible_else_if = "allow"
+# Allow needless continue for clarity in loops
+needless_continue = "allow"
