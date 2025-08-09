@@ -1,0 +1,89 @@
+[package]
+name = "nettest"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["Network Test Tool"]
+description = "A comprehensive network connectivity and DNS testing CLI tool"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/nettest"
+keywords = ["network", "dns", "testing", "connectivity", "cli"]
+categories = ["command-line-utilities", "network-programming"]
+
+[[bin]]
+name = "nettest"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+trust-dns-resolver = "0.23"
+trust-dns-client = "0.23"
+socket2 = "0.5"
+pnet = "0.34"
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+env_logger = "0.10"
+colored = "2.0"
+indicatif = "0.17"
+rand = "0.8"
+futures = "0.3"
+libc = "0.2"
+
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = "0.5"
+proptest = "1.0"
+pretty_assertions = "1.0"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Allow some pedantic lints that can be overly strict
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+# Allow multiple crate versions (common in dependency trees)
+multiple_crate_versions = "allow"
+# Allow some formatting preferences  
+uninlined_format_args = "allow"
+# Allow some code style preferences
+use_self = "allow"
+wildcard_imports = "allow"
+# Allow missing const for builder patterns
+missing_const_for_fn = "allow"
+# Allow casting precision loss for statistical calculations
+cast_precision_loss = "allow"
+# Allow redundant closures for clarity
+redundant_closure = "allow"
+# Allow inefficient to_string for readability
+inefficient_to_string = "allow"
+# Allow ignored unit patterns
+ignored_unit_patterns = "allow"
+# Allow needless borrows for readability
+needless_borrows_for_generic_args = "allow"
+# Allow match same arms for clear documentation
+match_same_arms = "allow"
+# Allow redundant closures for method calls
+redundant_closure_for_method_calls = "allow"
+# Allow functions with many lines for complex logic
+too_many_lines = "allow"
+# Allow single match else patterns
+single_match_else = "allow"
+# Allow redundant pattern matching for clarity
+redundant_pattern_matching = "allow"
+# Allow unused self in methods that may need it later
+unused_self = "allow"
+# Allow single component path imports for clarity
+single_component_path_imports = "allow"
+# Allow complex boolean expressions in tests
+overly_complex_bool_expr = "allow"
+# Allow map_unwrap_or patterns
+map_unwrap_or = "allow"
+# Allow collapsible else if patterns
+collapsible_else_if = "allow"

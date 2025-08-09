@@ -1,0 +1,94 @@
+#!/bin/bash
+
+set -e
+
+echo "🚀 Running pre-commit checks..."
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_status() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+# Check if cargo is available
+if ! command -v cargo &> /dev/null; then
+    print_error "Cargo is not installed or not in PATH"
+    exit 1
+fi
+
+# Check for staged Rust files
+staged_rust_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(rs)$' || true)
+
+if [ -z "$staged_rust_files" ]; then
+    print_warning "No Rust files staged for commit"
+    exit 0
+fi
+
+echo "Staged Rust files:"
+echo "$staged_rust_files"
+echo
+
+# 1. Check formatting
+echo "📝 Checking code formatting..."
+if ! cargo fmt -- --check; then
+    print_error "Code formatting check failed!"
+    echo "Run 'cargo fmt' to fix formatting issues"
+    exit 1
+fi
+print_status "Code formatting is correct"
+
+# 2. Run Clippy
+echo "📎 Running Clippy linter..."
+if ! cargo clippy --all-features --all-targets -- -D warnings; then
+    print_error "Clippy found issues!"
+    echo "Fix the issues above or run 'cargo clippy --fix' for automatic fixes"
+    exit 1
+fi
+print_status "Clippy checks passed"
+
+# 3. Run tests
+echo "🧪 Running tests..."
+if ! cargo test --all-features; then
+    print_error "Tests failed!"
+    echo "Fix failing tests before committing"
+    exit 1
+fi
+print_status "All tests passed"
+
+# 4. Check for security vulnerabilities (optional - only if cargo-audit is installed)
+if command -v cargo-audit &> /dev/null; then
+    echo "🔒 Running security audit..."
+    if ! cargo audit; then
+        print_error "Security vulnerabilities found!"
+        echo "Review and fix security issues before committing"
+        exit 1
+    fi
+    print_status "Security audit passed"
+else
+    print_warning "cargo-audit not installed. Run 'cargo install cargo-audit' to enable security checks"
+fi
+
+# 5. Check that the project builds
+echo "🔨 Building project..."
+if ! cargo build --all-features; then
+    print_error "Build failed!"
+    exit 1
+fi
+print_status "Build successful"
+
+echo
+echo -e "${GREEN}🎉 All pre-commit checks passed!${NC}"
+echo "Proceeding with commit..."
