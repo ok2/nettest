@@ -79,7 +79,45 @@ impl DnsTest {
         .await;
 
         match result {
-            Ok(details) => TestResult::new(test_name).success(duration, details),
+            Ok(details) => {
+                // Check if the resolved IPs are sinkholed
+                let ips = self.extract_ips_from_dns_details(&details);
+                let sinkhole_analysis = analyze_sinkhole_ips(&ips);
+
+                match sinkhole_analysis {
+                    SinkholeAnalysis::FullySinkholed(sinkhole_ips) => {
+                        let sinkhole_list: Vec<String> =
+                            sinkhole_ips.iter().map(|ip| ip.to_string()).collect();
+                        TestResult::new(test_name).success(
+                            duration,
+                            format!(
+                                "🕳️ SINKHOLED: {} (blocked via DNS redirect)",
+                                sinkhole_list.join(", ")
+                            ),
+                        )
+                    }
+                    SinkholeAnalysis::PartiallySinkholed {
+                        sinkhole_ips,
+                        legitimate_ips,
+                    } => {
+                        let sinkhole_list: Vec<String> =
+                            sinkhole_ips.iter().map(|ip| ip.to_string()).collect();
+                        let legit_list: Vec<String> =
+                            legitimate_ips.iter().map(|ip| ip.to_string()).collect();
+                        TestResult::new(test_name).success(
+                            duration,
+                            format!(
+                                "⚡ PARTIAL SINKHOLE: Blocked: {} | Real IPs: {}",
+                                sinkhole_list.join(", "),
+                                legit_list.join(", ")
+                            ),
+                        )
+                    }
+                    SinkholeAnalysis::NotSinkholed(_) => {
+                        TestResult::new(test_name).success(duration, details)
+                    }
+                }
+            }
             Err(error) => TestResult::new(test_name).failure(duration, error),
         }
     }
@@ -544,9 +582,16 @@ impl DnsTest {
     fn extract_ips_from_dns_details(&self, dns_details: &str) -> Vec<IpAddr> {
         let mut ips = Vec::new();
 
-        // Look for patterns like "A records: 1.2.3.4, 5.6.7.8"
+        // Look for patterns like "A records: 1.2.3.4, 5.6.7.8" or "A records: 1.2.3.4 (via server)"
         if let Some(records_part) = dns_details.split("records: ").nth(1) {
-            for ip_str in records_part.split(", ") {
+            // Remove any " (via server)" suffix first
+            let clean_records = if let Some(pos) = records_part.find(" (via ") {
+                &records_part[..pos]
+            } else {
+                records_part
+            };
+
+            for ip_str in clean_records.split(", ") {
                 if let Ok(ip) = ip_str.trim().parse::<IpAddr>() {
                     ips.push(ip);
                 }
@@ -558,17 +603,30 @@ impl DnsTest {
 }
 
 pub async fn test_common_dns_servers(domain: &str, record_type: RecordType) -> Vec<TestResult> {
-    let servers = [
-        "8.8.8.8:53",        // Google
-        "8.8.4.4:53",        // Google
-        "1.1.1.1:53",        // Cloudflare
-        "1.0.0.1:53",        // Cloudflare
-        "9.9.9.9:53",        // Quad9
-        "208.67.222.222:53", // OpenDNS
-        "208.67.220.220:53", // OpenDNS
-    ];
-
     let mut results = Vec::new();
+
+    // First test the system DNS resolver (no specific server)
+    let system_test = DnsTest::new(domain.to_string(), record_type);
+    let mut system_result = system_test.run().await;
+    system_result.test_name = format!(
+        "DNS {:?} query for {} (UDP via System DNS)",
+        record_type, domain
+    );
+    results.push(system_result);
+
+    // Then test external DNS servers
+    let servers = [
+        "8.8.8.8:53",         // Google Primary
+        "8.8.4.4:53",         // Google Secondary
+        "1.1.1.1:53",         // Cloudflare Primary
+        "1.0.0.1:53",         // Cloudflare Secondary
+        "9.9.9.9:53",         // Quad9 Primary
+        "149.112.112.112:53", // Quad9 Secondary
+        "208.67.222.222:53",  // OpenDNS Primary
+        "208.67.220.220:53",  // OpenDNS Secondary
+        "1.1.1.2:53",         // Cloudflare Family (blocks malware/adult)
+        "1.1.1.3:53",         // Cloudflare Family (blocks malware)
+    ];
 
     for server_str in &servers {
         if let Ok(server) = server_str.parse::<SocketAddr>() {
