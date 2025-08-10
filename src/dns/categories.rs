@@ -35,7 +35,6 @@ pub const AD_SITES: DomainCategory = DomainCategory {
         "facebook.com",
         "googletagmanager.com",
         "amazon-adsystem.com",
-        "adsystem.amazon.com",
         "outbrain.com",
         "taboola.com",
         "criteo.com",
@@ -54,7 +53,6 @@ pub const SPAM_SITES: DomainCategory = DomainCategory {
         "spam4.me",
         "trashmail.com",
         "yopmail.com",
-        "tempinbox.com",
         "throwaway.email",
         "temp-mail.org",
     ],
@@ -136,7 +134,7 @@ pub const STREAMING_SITES: DomainCategory = DomainCategory {
 pub const GAMING_SITES: DomainCategory = DomainCategory {
     name: "Gaming Platforms",
     domains: &[
-        "steam.com",
+        "steampowered.com",
         "epicgames.com",
         "battle.net",
         "origin.com",
