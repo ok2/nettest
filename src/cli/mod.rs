@@ -181,24 +181,24 @@ pub enum RecordTypeArg {
 }
 
 impl RecordTypeArg {
-    pub fn to_record_type(&self) -> Vec<trust_dns_client::rr::RecordType> {
+    pub fn to_record_type(&self) -> Vec<hickory_client::rr::RecordType> {
         match self {
-            RecordTypeArg::A => vec![trust_dns_client::rr::RecordType::A],
-            RecordTypeArg::AAAA => vec![trust_dns_client::rr::RecordType::AAAA],
-            RecordTypeArg::MX => vec![trust_dns_client::rr::RecordType::MX],
-            RecordTypeArg::NS => vec![trust_dns_client::rr::RecordType::NS],
-            RecordTypeArg::TXT => vec![trust_dns_client::rr::RecordType::TXT],
-            RecordTypeArg::CNAME => vec![trust_dns_client::rr::RecordType::CNAME],
-            RecordTypeArg::SOA => vec![trust_dns_client::rr::RecordType::SOA],
-            RecordTypeArg::PTR => vec![trust_dns_client::rr::RecordType::PTR],
+            RecordTypeArg::A => vec![hickory_client::rr::RecordType::A],
+            RecordTypeArg::AAAA => vec![hickory_client::rr::RecordType::AAAA],
+            RecordTypeArg::MX => vec![hickory_client::rr::RecordType::MX],
+            RecordTypeArg::NS => vec![hickory_client::rr::RecordType::NS],
+            RecordTypeArg::TXT => vec![hickory_client::rr::RecordType::TXT],
+            RecordTypeArg::CNAME => vec![hickory_client::rr::RecordType::CNAME],
+            RecordTypeArg::SOA => vec![hickory_client::rr::RecordType::SOA],
+            RecordTypeArg::PTR => vec![hickory_client::rr::RecordType::PTR],
             RecordTypeArg::All => vec![
-                trust_dns_client::rr::RecordType::A,
-                trust_dns_client::rr::RecordType::AAAA,
-                trust_dns_client::rr::RecordType::MX,
-                trust_dns_client::rr::RecordType::NS,
-                trust_dns_client::rr::RecordType::TXT,
-                trust_dns_client::rr::RecordType::CNAME,
-                trust_dns_client::rr::RecordType::SOA,
+                hickory_client::rr::RecordType::A,
+                hickory_client::rr::RecordType::AAAA,
+                hickory_client::rr::RecordType::MX,
+                hickory_client::rr::RecordType::NS,
+                hickory_client::rr::RecordType::TXT,
+                hickory_client::rr::RecordType::CNAME,
+                hickory_client::rr::RecordType::SOA,
             ],
         }
     }

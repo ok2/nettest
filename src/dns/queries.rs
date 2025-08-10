@@ -1,6 +1,6 @@
 use super::DnsTest;
 use crate::utils::TestResult;
-use trust_dns_client::rr::RecordType;
+use hickory_client::rr::RecordType;
 
 pub async fn comprehensive_dns_test(domain: &str) -> Vec<TestResult> {
     let mut results = Vec::new();

@@ -1,13 +1,13 @@
 use crate::utils::{measure_time, NetworkError, Result, TestResult};
+use hickory_client::rr::{Name, RData, RecordData, RecordType};
+use hickory_resolver::config::*;
+use hickory_resolver::system_conf;
+use hickory_resolver::TokioAsyncResolver;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use trust_dns_client::rr::{Name, RData, RecordData, RecordType};
-use trust_dns_resolver::config::*;
-use trust_dns_resolver::system_conf;
-use trust_dns_resolver::TokioAsyncResolver;
 
 pub mod categories;
 pub mod queries;
@@ -290,8 +290,8 @@ impl DnsTest {
     }
 
     async fn query_system_resolver(&self) -> Result<String> {
-        // Try to use system DNS configuration first, fall back to default if that fails
-        let (config, opts) = match system_conf::read_system_conf() {
+        // Try to use system DNS configuration but disable search domains for accurate testing
+        let (mut config, mut opts) = match system_conf::read_system_conf() {
             Ok((config, opts)) => (config, opts),
             Err(_) => {
                 // Fallback to default config if system config cannot be read
@@ -299,6 +299,18 @@ impl DnsTest {
                 (ResolverConfig::default(), ResolverOpts::default())
             }
         };
+
+        // Clear search domains to prevent automatic domain expansion during DNS testing
+        // This ensures we query the exact domain name provided
+        // Create a new config with the same name servers but no search domains
+        let mut clean_config = ResolverConfig::new();
+        for name_server in config.name_servers() {
+            clean_config.add_name_server(name_server.clone());
+        }
+        config = clean_config;
+
+        // Ensure we don't use search domains
+        opts.ndots = 0;
 
         let resolver = TokioAsyncResolver::tokio(config, opts);
 
@@ -324,35 +336,52 @@ impl DnsTest {
                     Ok(format!("AAAA records: {}", ips.join(", ")))
                 }
                 RecordType::MX => {
-                    let lookup = resolver
-                        .mx_lookup(name.clone())
-                        .await
-                        .map_err(|e| format!("MX lookup failed: {}", e))?;
-                    let records: Vec<String> = lookup
-                        .iter()
-                        .map(|mx| format!("{} {}", mx.preference(), mx.exchange()))
-                        .collect();
-                    Ok(format!("MX records: {}", records.join(", ")))
+                    let lookup_result = resolver.mx_lookup(name.clone()).await;
+                    handle_dns_lookup_result(
+                        lookup_result,
+                        "MX",
+                        |lookup| {
+                            let records: Vec<String> = lookup
+                                .iter()
+                                .map(|mx| format!("{} {}", mx.preference(), mx.exchange()))
+                                .collect();
+                            format!("MX records: {}", records.join(", "))
+                        },
+                        "(none - no mail servers configured)",
+                    )
                 }
                 RecordType::TXT => {
-                    let lookup = resolver
-                        .txt_lookup(name.clone())
-                        .await
-                        .map_err(|e| format!("TXT lookup failed: {}", e))?;
-                    let records: Vec<String> = lookup.iter().map(|txt| txt.to_string()).collect();
-                    Ok(format!("TXT records: {}", records.join(", ")))
+                    let lookup_result = resolver.txt_lookup(name.clone()).await;
+                    handle_dns_lookup_result(
+                        lookup_result,
+                        "TXT",
+                        |lookup| {
+                            let records: Vec<String> =
+                                lookup.iter().map(|txt| txt.to_string()).collect();
+                            format!("TXT records: {}", records.join(", "))
+                        },
+                        "(none - no text records found)",
+                    )
                 }
                 RecordType::NS => {
-                    let lookup = resolver
-                        .ns_lookup(name.clone())
-                        .await
-                        .map_err(|e| format!("NS lookup failed: {}", e))?;
-                    let records: Vec<String> = lookup.iter().map(|ns| ns.to_string()).collect();
-                    Ok(format!("NS records: {}", records.join(", ")))
+                    let lookup_result = resolver.ns_lookup(name.clone()).await;
+                    handle_dns_lookup_result(
+                        lookup_result,
+                        "NS",
+                        |lookup| {
+                            let records: Vec<String> =
+                                lookup.iter().map(|ns| ns.to_string()).collect();
+                            format!("NS records: {}", records.join(", "))
+                        },
+                        "(none - no name servers found)",
+                    )
                 }
                 RecordType::CNAME => {
-                    match resolver.lookup(name.clone(), self.record_type).await {
-                        Ok(lookup) => {
+                    let lookup_result = resolver.lookup(name.clone(), self.record_type).await;
+                    handle_dns_lookup_result(
+                        lookup_result,
+                        "CNAME",
+                        |lookup| {
                             let records: Vec<String> = lookup
                                 .iter()
                                 .filter_map(|record| {
@@ -363,40 +392,36 @@ impl DnsTest {
                                     }
                                 })
                                 .collect();
-                            Ok(format!("CNAME records: {}", records.join(", ")))
-                        }
-                        Err(e) => {
-                            // Check if this is just "no records found" which is normal for domains without CNAME
-                            let error_str = e.to_string();
-                            if error_str.contains("no record found") {
-                                Ok("CNAME records: (none - domain is not an alias)".to_string())
-                            } else {
-                                Err(format!("CNAME lookup failed: {}", e))
-                            }
-                        }
-                    }
+                            format!("CNAME records: {}", records.join(", "))
+                        },
+                        "(none - domain is not an alias)",
+                    )
                 }
                 RecordType::SOA => {
-                    let lookup = resolver
-                        .soa_lookup(name.clone())
-                        .await
-                        .map_err(|e| format!("SOA lookup failed: {}", e))?;
-                    let records: Vec<String> = lookup
-                        .iter()
-                        .map(|soa| {
-                            format!(
-                                "{} {} {} {} {} {} {}",
-                                soa.mname(),
-                                soa.rname(),
-                                soa.serial(),
-                                soa.refresh(),
-                                soa.retry(),
-                                soa.expire(),
-                                soa.minimum()
-                            )
-                        })
-                        .collect();
-                    Ok(format!("SOA records: {}", records.join(", ")))
+                    let lookup_result = resolver.soa_lookup(name.clone()).await;
+                    handle_dns_lookup_result(
+                        lookup_result,
+                        "SOA",
+                        |lookup| {
+                            let records: Vec<String> = lookup
+                                .iter()
+                                .map(|soa| {
+                                    format!(
+                                        "{} {} {} {} {} {} {}",
+                                        soa.mname(),
+                                        soa.rname(),
+                                        soa.serial(),
+                                        soa.refresh(),
+                                        soa.retry(),
+                                        soa.expire(),
+                                        soa.minimum()
+                                    )
+                                })
+                                .collect();
+                            format!("SOA records: {}", records.join(", "))
+                        },
+                        "(none - no authority records found)",
+                    )
                 }
                 RecordType::PTR => {
                     let lookup = resolver
@@ -435,9 +460,9 @@ impl DnsTest {
     async fn query_specific_server(&self, server: SocketAddr) -> Result<String> {
         // Create a resolver configuration that uses the specific server
         let mut config = ResolverConfig::new();
-        config.add_name_server(trust_dns_resolver::config::NameServerConfig::new(
+        config.add_name_server(hickory_resolver::config::NameServerConfig::new(
             server,
-            trust_dns_resolver::config::Protocol::Udp,
+            hickory_resolver::config::Protocol::Udp,
         ));
         let opts = ResolverOpts::default();
 
@@ -694,5 +719,25 @@ pub fn debug_dns_config() -> String {
             debug_info.join("\n")
         }
         Err(e) => format!("❌ Could not read system DNS config: {}", e),
+    }
+}
+
+/// Helper function to handle DNS lookup results consistently across all record types
+fn handle_dns_lookup_result<T>(
+    result: std::result::Result<T, hickory_resolver::error::ResolveError>,
+    record_type: &str,
+    format_success: impl FnOnce(T) -> String,
+    empty_message: &str,
+) -> std::result::Result<String, String> {
+    match result {
+        Ok(lookup_result) => Ok(format_success(lookup_result)),
+        Err(e) => {
+            let error_str = e.to_string();
+            if error_str.contains("no record found") || error_str.contains("Name not found") {
+                Ok(format!("{} records: {}", record_type, empty_message))
+            } else {
+                Err(format!("{} lookup failed: {}", record_type, e))
+            }
+        }
     }
 }

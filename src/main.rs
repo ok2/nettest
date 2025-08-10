@@ -285,7 +285,7 @@ async fn handle_full_test(
 
     // DNS servers test
     let dns_servers =
-        dns::test_common_dns_servers(&target, trust_dns_client::rr::RecordType::A).await;
+        dns::test_common_dns_servers(&target, hickory_client::rr::RecordType::A).await;
     all_results.extend(dns_servers);
     pb.inc(1);
 

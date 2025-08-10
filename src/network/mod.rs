@@ -78,8 +78,8 @@ impl NetworkTest {
     }
 
     async fn resolve_target(&self) -> Result<IpAddr> {
-        use trust_dns_resolver::config::*;
-        use trust_dns_resolver::TokioAsyncResolver;
+        use hickory_resolver::config::*;
+        use hickory_resolver::TokioAsyncResolver;
 
         let resolver =
             TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());

@@ -33,11 +33,8 @@ async fn test_network_udp_connectivity() {
 
 #[tokio::test]
 async fn test_dns_query() {
-    let test = dns::DnsTest::new(
-        "google.com".to_string(),
-        trust_dns_client::rr::RecordType::A,
-    )
-    .with_timeout(Duration::from_secs(10));
+    let test = dns::DnsTest::new("google.com".to_string(), hickory_client::rr::RecordType::A)
+        .with_timeout(Duration::from_secs(10));
 
     let result = test.run().await;
     assert!(result.success, "DNS A query for google.com should succeed");
@@ -48,7 +45,7 @@ async fn test_dns_query() {
 #[tokio::test]
 async fn test_dns_servers() {
     let results =
-        dns::test_common_dns_servers("google.com", trust_dns_client::rr::RecordType::A).await;
+        dns::test_common_dns_servers("google.com", hickory_client::rr::RecordType::A).await;
     assert!(!results.is_empty());
 
     let successful_results = results.iter().filter(|r| r.success).count();
@@ -83,7 +80,7 @@ async fn test_comprehensive_dns() {
 async fn test_domain_categories() {
     let results = dns::categories::test_domain_category(
         &dns::categories::NORMAL_SITES,
-        trust_dns_client::rr::RecordType::A,
+        hickory_client::rr::RecordType::A,
     )
     .await;
 
