@@ -351,21 +351,30 @@ impl DnsTest {
                     Ok(format!("NS records: {}", records.join(", ")))
                 }
                 RecordType::CNAME => {
-                    let lookup = resolver
-                        .lookup(name.clone(), self.record_type)
-                        .await
-                        .map_err(|e| format!("CNAME lookup failed: {}", e))?;
-                    let records: Vec<String> = lookup
-                        .iter()
-                        .filter_map(|record| {
-                            if let RData::CNAME(cname) = record.clone().into_rdata() {
-                                Some(cname.to_string())
+                    match resolver.lookup(name.clone(), self.record_type).await {
+                        Ok(lookup) => {
+                            let records: Vec<String> = lookup
+                                .iter()
+                                .filter_map(|record| {
+                                    if let RData::CNAME(cname) = record.clone().into_rdata() {
+                                        Some(cname.to_string())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            Ok(format!("CNAME records: {}", records.join(", ")))
+                        }
+                        Err(e) => {
+                            // Check if this is just "no records found" which is normal for domains without CNAME
+                            let error_str = e.to_string();
+                            if error_str.contains("no record found") {
+                                Ok("CNAME records: (none - domain is not an alias)".to_string())
                             } else {
-                                None
+                                Err(format!("CNAME lookup failed: {}", e))
                             }
-                        })
-                        .collect();
-                    Ok(format!("CNAME records: {}", records.join(", ")))
+                        }
+                    }
                 }
                 RecordType::SOA => {
                     let lookup = resolver
@@ -418,7 +427,7 @@ impl DnsTest {
         })
         .await
         .map_err(|_| NetworkError::Timeout)?
-        .map_err(|_: String| NetworkError::DnsResolution("System resolver failed".to_string()))?;
+        .map_err(|e: String| NetworkError::DnsResolution(e))?;
 
         Ok(response)
     }
