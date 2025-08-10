@@ -57,6 +57,19 @@ async fn test_dns_servers() {
 
 #[tokio::test]
 async fn test_mtu_discovery() {
+    // Skip MTU discovery on CI environments where ICMP ping is not available
+    if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+        // Just test the creation and basic structure without network operations
+        let discovery = mtu::MtuDiscovery::new("google.com".to_string(), network::IpVersion::V4)
+            .with_range(68, 576);
+
+        // Basic validation that the discovery object is created correctly
+        assert_eq!(discovery.target, "google.com");
+        assert!(matches!(discovery.ip_version, network::IpVersion::V4));
+        assert!(discovery.min_mtu <= discovery.max_mtu);
+        return;
+    }
+
     let discovery = mtu::MtuDiscovery::new("google.com".to_string(), network::IpVersion::V4)
         .with_range(68, 576); // Test smaller range for speed
 
