@@ -189,18 +189,26 @@ async fn handle_dns_command(command: cli::DnsCommands, timeout: Duration) -> Vec
 
 async fn handle_mtu_command(command: cli::MtuCommands, _timeout: Duration) -> Vec<TestResult> {
     match command {
-        cli::MtuCommands::Discover { target, ip_version } => {
+        cli::MtuCommands::Discover {
+            target,
+            ip_version,
+            sudo,
+        } => {
             let mut results = Vec::new();
             for version in ip_version.to_versions() {
-                let result = mtu::full_mtu_discovery(&target, version).await;
-                results.push(result);
+                let discovery = mtu::MtuDiscovery::new(target.clone(), version).with_sudo(sudo);
+                results.push(discovery.discover().await);
             }
             results
         }
-        cli::MtuCommands::Common { target, ip_version } => {
+        cli::MtuCommands::Common {
+            target,
+            ip_version,
+            sudo,
+        } => {
             let mut results = Vec::new();
             for version in ip_version.to_versions() {
-                let common_results = mtu::test_common_mtu_sizes(&target, version).await;
+                let common_results = mtu::test_common_mtu_sizes(&target, version, sudo).await;
                 results.extend(common_results);
             }
             results
@@ -210,11 +218,13 @@ async fn handle_mtu_command(command: cli::MtuCommands, _timeout: Duration) -> Ve
             min,
             max,
             ip_version,
+            sudo,
         } => {
             let mut results = Vec::new();
             for version in ip_version.to_versions() {
-                let discovery =
-                    mtu::MtuDiscovery::new(target.clone(), version).with_range(min, max);
+                let discovery = mtu::MtuDiscovery::new(target.clone(), version)
+                    .with_range(min, max)
+                    .with_sudo(sudo);
                 results.push(discovery.discover().await);
             }
             results
@@ -272,7 +282,7 @@ async fn handle_full_test(
         pb.inc(1);
 
         // Common MTU sizes
-        let mtu_common = mtu::test_common_mtu_sizes(&target, version).await;
+        let mtu_common = mtu::test_common_mtu_sizes(&target, version, false).await;
         all_results.extend(mtu_common);
         pb.inc(1);
     }

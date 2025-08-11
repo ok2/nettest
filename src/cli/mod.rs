@@ -122,22 +122,37 @@ pub enum MtuCommands {
         target: String,
         #[arg(short, long, value_enum, default_value = "both")]
         ip_version: IpVersionArg,
+        #[arg(
+            long,
+            help = "Use sudo for more accurate MTU testing (requires interactive password prompt)"
+        )]
+        sudo: bool,
     },
     #[command(about = "Test common MTU sizes")]
     Common {
         target: String,
         #[arg(short, long, value_enum, default_value = "both")]
         ip_version: IpVersionArg,
+        #[arg(
+            long,
+            help = "Use sudo for more accurate MTU testing (requires interactive password prompt)"
+        )]
+        sudo: bool,
     },
     #[command(about = "Test custom MTU range")]
     Range {
         target: String,
-        #[arg(short, long, default_value = "68")]
+        #[arg(long, default_value = "68")]
         min: u16,
-        #[arg(short, long, default_value = "1500")]
+        #[arg(long, default_value = "1500")]
         max: u16,
         #[arg(short, long, value_enum, default_value = "both")]
         ip_version: IpVersionArg,
+        #[arg(
+            long,
+            help = "Use sudo for more accurate MTU testing (requires interactive password prompt)"
+        )]
+        sudo: bool,
     },
 }
 
