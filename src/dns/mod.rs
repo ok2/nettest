@@ -1,3 +1,67 @@
+//! DNS testing module with comprehensive DNS resolution capabilities.
+//!
+//! This module provides extensive DNS testing functionality including:
+//! - Traditional DNS queries (UDP/TCP) with multiple record types
+//! - DNS-over-HTTPS (`DoH`) support with 16 providers
+//! - DNS sinkhole detection and security analysis
+//! - Comprehensive DNS server testing (39 total providers)
+//! - EDNS0 support for large DNS responses
+//!
+//! # Examples
+//!
+//! ## Basic DNS Query
+//! ```rust
+//! use nettest::dns::DnsTest;
+//! use hickory_client::rr::RecordType;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let test = DnsTest::new("google.com".to_string(), RecordType::A);
+//!     let result = test.run().await;
+//!     
+//!     if result.success {
+//!         println!("DNS resolution successful: {}", result.details);
+//!     } else {
+//!         println!("DNS resolution failed: {:?}", result.error);
+//!     }
+//! }
+//! ```
+//!
+//! ## Testing Multiple DNS Servers
+//! ```rust
+//! use nettest::dns;
+//! use hickory_client::rr::RecordType;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     // Test all 39 DNS providers (23 traditional + 16 DoH)
+//!     let results = dns::test_common_dns_servers("example.com", RecordType::A).await;
+//!     
+//!     let successful = results.iter().filter(|r| r.success).count();
+//!     let total = results.len();
+//!     println!("DNS server tests: {}/{} successful", successful, total);
+//! }
+//! ```
+//!
+//! ## Custom DNS Server Testing
+//! ```rust
+//! use nettest::dns::DnsTest;
+//! use hickory_client::rr::RecordType;
+//! use std::net::SocketAddr;
+//! use std::str::FromStr;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let server = SocketAddr::from_str("8.8.8.8:53").unwrap();
+//!     let test = DnsTest::new("google.com".to_string(), RecordType::A)
+//!         .with_server(server)
+//!         .with_tcp(true); // Use TCP instead of UDP
+//!     
+//!     let result = test.run().await;
+//!     println!("Custom DNS test result: {}", result.test_name);
+//! }
+//! ```
+
 use crate::utils::{measure_time, NetworkError, Result, TestResult};
 use hickory_client::rr::{Name, RData, RecordData, RecordType};
 use hickory_resolver::config::*;
@@ -24,6 +88,65 @@ pub enum ConnectivityStatus {
     PartiallyReachable,
 }
 
+/// DNS test configuration and execution.
+///
+/// `DnsTest` provides a builder-pattern API for configuring and running DNS queries
+/// with support for various record types, custom DNS servers, and protocol selection.
+///
+/// # Examples
+///
+/// ## Basic A Record Query
+/// ```rust
+/// use nettest::dns::DnsTest;
+/// use hickory_client::rr::RecordType;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let test = DnsTest::new("example.com".to_string(), RecordType::A);
+///     let result = test.run().await;
+///     
+///     assert_eq!(result.test_name, "DNS A query for example.com (UDP)");
+/// }
+/// ```
+///
+/// ## TXT Record Query with Custom Server
+/// ```rust
+/// use nettest::dns::DnsTest;
+/// use hickory_client::rr::RecordType;
+/// use std::net::SocketAddr;
+/// use std::str::FromStr;
+/// use std::time::Duration;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let google_dns = SocketAddr::from_str("8.8.8.8:53").unwrap();
+///     let test = DnsTest::new("google.com".to_string(), RecordType::TXT)
+///         .with_server(google_dns)
+///         .with_timeout(Duration::from_secs(10))
+///         .with_tcp(true);
+///     
+///     let result = test.run().await;
+///     println!("TXT query result: {}", result.details);
+/// }
+/// ```
+///
+/// ## Security Analysis with Sinkhole Detection
+/// ```rust
+/// use nettest::dns::DnsTest;
+/// use hickory_client::rr::RecordType;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // Test a domain that might be sinkholed
+///     let test = DnsTest::new("blocked-domain.test".to_string(), RecordType::A);
+///     let result = test.run_security_test().await;
+///     
+///     // Security tests treat blocking as success
+///     if result.success && result.details.contains("BLOCKED") {
+///         println!("Domain successfully blocked by DNS filtering");
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct DnsTest {
     pub domain: String,
@@ -34,6 +157,23 @@ pub struct DnsTest {
 }
 
 impl DnsTest {
+    /// Creates a new DNS test with default settings.
+    ///
+    /// # Arguments
+    /// * `domain` - The domain name to query
+    /// * `record_type` - The DNS record type to query
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::dns::DnsTest;
+    /// use hickory_client::rr::RecordType;
+    ///
+    /// let test = DnsTest::new("example.com".to_string(), RecordType::A);
+    /// assert_eq!(test.domain, "example.com");
+    /// assert_eq!(test.record_type, RecordType::A);
+    /// assert_eq!(test.timeout.as_secs(), 5);
+    /// assert_eq!(test.use_tcp, false);
+    /// ```
     pub fn new(domain: String, record_type: RecordType) -> Self {
         Self {
             domain,
@@ -44,16 +184,62 @@ impl DnsTest {
         }
     }
 
+    /// Sets a specific DNS server to query.
+    ///
+    /// # Arguments
+    /// * `server` - The DNS server socket address (IP:port)
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::dns::DnsTest;
+    /// use hickory_client::rr::RecordType;
+    /// use std::net::SocketAddr;
+    /// use std::str::FromStr;
+    ///
+    /// let server = SocketAddr::from_str("8.8.8.8:53").unwrap();
+    /// let test = DnsTest::new("example.com".to_string(), RecordType::A)
+    ///     .with_server(server);
+    /// assert_eq!(test.server, Some(server));
+    /// ```
     pub fn with_server(mut self, server: SocketAddr) -> Self {
         self.server = Some(server);
         self
     }
 
+    /// Sets a custom timeout for the DNS query.
+    ///
+    /// # Arguments
+    /// * `timeout` - Query timeout duration
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::dns::DnsTest;
+    /// use hickory_client::rr::RecordType;
+    /// use std::time::Duration;
+    ///
+    /// let test = DnsTest::new("example.com".to_string(), RecordType::A)
+    ///     .with_timeout(Duration::from_secs(10));
+    /// assert_eq!(test.timeout.as_secs(), 10);
+    /// ```
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
+    /// Sets the transport protocol (TCP vs UDP).
+    ///
+    /// # Arguments
+    /// * `use_tcp` - If true, use TCP; if false, use UDP
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::dns::DnsTest;
+    /// use hickory_client::rr::RecordType;
+    ///
+    /// let test = DnsTest::new("example.com".to_string(), RecordType::A)
+    ///     .with_tcp(true);
+    /// assert_eq!(test.use_tcp, true);
+    /// ```
     pub fn with_tcp(mut self, use_tcp: bool) -> Self {
         self.use_tcp = use_tcp;
         self
@@ -666,6 +852,42 @@ impl DnsTest {
     }
 }
 
+/// Tests a domain against all available DNS servers and `DoH` providers.
+///
+/// This function performs comprehensive DNS testing using:
+/// - System DNS resolver
+/// - 23 traditional DNS servers (Google, Cloudflare, Quad9, OpenDNS, `AdGuard`)
+/// - 16 DNS-over-HTTPS providers with JSON and Wire format support
+///
+/// # Arguments
+/// * `domain` - The domain name to test
+/// * `record_type` - The DNS record type to query
+///
+/// # Returns
+/// A vector of `TestResult` containing results from all 39 DNS providers
+///
+/// # Examples
+/// ```rust
+/// use nettest::dns::test_common_dns_servers;
+/// use hickory_client::rr::RecordType;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let results = test_common_dns_servers("google.com", RecordType::A).await;
+///     
+///     // Count successful vs failed tests
+///     let successful = results.iter().filter(|r| r.success).count();
+///     let total = results.len();
+///     
+///     println!("DNS server tests: {}/{} successful", successful, total);
+///     assert!(total >= 39); // At least 39 providers tested
+///     
+///     // Check that we tested both traditional DNS and DoH
+///     let has_traditional = results.iter().any(|r| r.test_name.contains("8.8.8.8"));
+///     let has_doh = results.iter().any(|r| r.test_name.contains("DoH"));
+///     assert!(has_traditional && has_doh);
+/// }
+/// ```
 pub async fn test_common_dns_servers(domain: &str, record_type: RecordType) -> Vec<TestResult> {
     let mut results = Vec::new();
 

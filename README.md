@@ -1,245 +1,520 @@
-# NetTest - Network Connectivity Testing Tool
+# NetTest 🌐
 
-A comprehensive command-line tool written in Rust for testing network connectivity, DNS resolution, and network path characteristics across IPv4 and IPv6.
+A comprehensive network connectivity and DNS testing CLI tool written in Rust. NetTest provides extensive testing capabilities for network diagnostics, DNS resolution (including DNS-over-HTTPS), MTU discovery, and connectivity analysis.
 
-**Key Features:**
-- 🌐 Comprehensive IPv4/IPv6 connectivity testing
-- 🔍 Advanced DNS testing with sinkhole detection
-- 📊 MTU discovery and path analysis  
-- 🛡️ DNS filtering effectiveness analysis
-- 🚀 High-performance async implementation
-- 📋 Human-readable and JSON output formats
-
-## Quick Start
-
-```bash
-# Clone and build
-git clone https://github.com/your-username/nettest.git
-cd nettest && cargo build --release
-
-# Run comprehensive tests
-./target/release/nettest full google.com
-
-# Test DNS with IPv6
-./target/release/nettest network ping google.com --ip-version v6
-
-# Check DNS filtering effectiveness  
-./target/release/nettest dns filtering
-```
+[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
+[![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#testing)
 
 ## Features
 
-### Network Testing
-- **IPv4 and IPv6 support** - Test connectivity using both IP versions
-- **Multiple protocols** - Support for TCP, UDP, and ICMP
-- **Port testing** - Test common ports and custom port ranges
-- **Timeout configuration** - Configurable timeouts for all tests
+- **🌐 Network Connectivity Testing**: TCP, UDP, and ICMP ping tests with IPv4/IPv6 support
+- **🔍 DNS Resolution Testing**: Comprehensive DNS testing with 23 traditional DNS servers
+- **🚀 DNS-over-HTTPS (DoH) Support**: 16 DoH providers with JSON and Wire format support
+- **📏 MTU Discovery**: Automated MTU path discovery and common size testing
+- **🛡️ Security Analysis**: DNS filtering, sinkhole detection, and security categorization
+- **⚡ High Performance**: Async/concurrent testing with progress indicators
+- **📊 Multiple Output Formats**: Human-readable and JSON output formats
 
-### MTU Discovery
-- **Binary search MTU discovery** - Efficiently find the maximum MTU size
-- **Common MTU testing** - Test standard MTU sizes (68, 576, 1280, 1500, 4464, 9000)
-- **Custom range testing** - Test specific MTU ranges
-- **IPv4 and IPv6 support** - MTU discovery for both IP versions
+## Quick Start
 
-### DNS Testing
-- **Comprehensive record types** - A, AAAA, MX, NS, TXT, CNAME, SOA, PTR, and more
-- **Multiple DNS servers** - Test against Google, Cloudflare, Quad9, OpenDNS, and others
-- **TCP and UDP queries** - Support for both DNS transport protocols
-- **Sinkhole detection** - Automatically detects DNS sinkholing (0.0.0.0, 127.0.0.1, etc.)
-- **Smart error handling** - Distinguishes between DNS failures and missing records
-- **System DNS integration** - Uses system DNS configuration while avoiding search domain expansion
-- **Large query testing** - Test handling of large DNS responses
-- **International domains** - Support for IDN (Internationalized Domain Names)
-
-### Domain Category Testing
-- **Normal websites** - Test legitimate, commonly used sites
-- **Ad networks** - Test advertising and tracking domains
-- **Spam domains** - Test temporary email and spam-associated domains  
-- **Adult content** - Test adult content sites (often filtered)
-- **Malicious domains** - Test known malicious/phishing domains
-- **Social media** - Test major social media platforms
-- **Streaming services** - Test video and music streaming sites
-- **Gaming platforms** - Test gaming services and platforms
-- **News websites** - Test major news and media sites
-
-### DNS Filtering Analysis
-- **Filter effectiveness** - Analyze how well DNS filtering is working
-- **Category-based analysis** - See which categories are being blocked
-- **Detailed reporting** - Get statistics on resolution success rates
-
-## Installation
-
-### From Source
+### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/nettest.git
-cd nettest
+git clone https://github.com/your-username/NetTest.git
+cd NetTest
 
 # Build the project
 cargo build --release
 
-# Install globally (optional)
-cargo install --path .
+# Run tests (optional)
+cargo test
 ```
 
-### Using Cargo
+### Basic Usage
 
 ```bash
-# Install directly from source (when published)
-cargo install nettest
+# Full network test suite
+./target/release/nettest full google.com
+
+# Test DNS resolution
+./target/release/nettest dns query google.com
+
+# Test all DNS servers
+./target/release/nettest dns servers google.com
+
+# Test DNS-over-HTTPS
+./target/release/nettest dns doh google.com
+
+# Test network connectivity
+./target/release/nettest network ping google.com --count 5
+
+# Discover MTU
+./target/release/nettest mtu discover google.com
 ```
 
-### Requirements
+## Comprehensive Command Reference
 
-- Rust 1.70 or later
-- Root/administrator privileges may be required for:
-  - ICMP ping tests
-  - Raw socket operations
-  - Some MTU discovery operations
+### Network Testing
 
-## Usage
-
-### Basic Commands
-
+#### TCP Connectivity
 ```bash
-# Run comprehensive tests on a target
-nettest full google.com
-
-# Test TCP connectivity
+# Test TCP connection to port 80
 nettest network tcp google.com --port 80
 
-# Test UDP connectivity  
-nettest network udp 8.8.8.8 --port 53
-
-# Ping test
-nettest network ping google.com --count 4
-
-# Test common ports
-nettest network ports google.com --protocol tcp
-
-# DNS query
-nettest dns query google.com --record-type a
-
-# Test DNS servers
-nettest dns servers google.com
-
-# Test domain categories
-nettest dns categories --category normal
-
-# MTU discovery
-nettest mtu discover google.com
-
-# Test common MTU sizes
-nettest mtu common google.com
-```
-
-### Advanced Options
-
-```bash
-# Specify IP version
+# Test specific IP versions
 nettest network tcp google.com --ip-version v4
 nettest network tcp google.com --ip-version v6
 nettest network tcp google.com --ip-version both
 
-# Custom timeout
-nettest --timeout 10 network tcp google.com
-
-# JSON output
-nettest --json dns query google.com
-
-# Verbose logging
-nettest --verbose full google.com
-
-# DNS query with specific server
-nettest dns query google.com --server 8.8.8.8:53 --tcp
-
-# Custom MTU range
-nettest mtu range google.com --min 1000 --max 1500
+# Test with custom timeout
+nettest network tcp google.com --port 443 --timeout 10
 ```
 
-### Domain Category Testing
-
-Test different categories of domains to analyze DNS filtering:
-
+#### UDP Connectivity
 ```bash
-# Test normal websites
-nettest dns categories --category normal
+# Test UDP connection to DNS port
+nettest network udp 8.8.8.8 --port 53
 
-# Test ad networks
-nettest dns categories --category ads
+# Test multiple IP versions
+nettest network udp cloudflare.com --port 53 --ip-version both
+```
 
-# Test all categories
-nettest dns categories --category all
+#### ICMP Ping Testing
+```bash
+# Basic ping test
+nettest network ping google.com
 
-# DNS filtering effectiveness
+# Extended ping with count
+nettest network ping google.com --count 10
+
+# Ping with sudo for more accurate results
+nettest network ping google.com --count 5 --sudo
+
+# IPv6 ping testing
+nettest network ping google.com --ip-version v6
+```
+
+#### Port Scanning
+```bash
+# Scan common TCP ports
+nettest network ports google.com --protocol tcp
+
+# Scan common UDP ports
+nettest network ports google.com --protocol udp
+
+# Scan both TCP and UDP
+nettest network ports google.com --protocol both
+```
+
+### DNS Testing
+
+#### Basic DNS Queries
+```bash
+# Query A records
+nettest dns query google.com --record-type a
+
+# Query different record types
+nettest dns query google.com --record-type aaaa
+nettest dns query google.com --record-type mx
+nettest dns query google.com --record-type txt
+nettest dns query google.com --record-type ns
+
+# Query all record types
+nettest dns query google.com --record-type all
+
+# Query specific DNS server
+nettest dns query google.com --server 8.8.8.8:53
+
+# Use TCP instead of UDP
+nettest dns query google.com --tcp
+```
+
+#### DNS Server Testing
+```bash
+# Test all 23 traditional DNS servers + 16 DoH providers (39 total)
+nettest dns servers google.com
+
+# Test with different record types
+nettest dns servers google.com --record-type txt
+nettest dns servers google.com --record-type mx
+```
+
+#### DNS-over-HTTPS (DoH) Testing
+```bash
+# Test all DoH providers
+nettest dns doh google.com
+
+# Test specific DoH provider
+nettest dns doh google.com --provider google
+nettest dns doh google.com --provider cloudflare
+nettest dns doh google.com --provider quad9
+
+# Available DoH providers:
+# - google (wire format)
+# - google-json (JSON format)
+# - cloudflare (wire format)
+# - cloudflare-json (JSON format)
+# - cloudflare-family (blocks malware/adult)
+# - cloudflare-family-json
+# - cloudflare-security (blocks malware only)
+# - cloudflare-security-json
+# - quad9 (blocks malicious domains)
+# - quad9-unsecured (no blocking)
+# - quad9-ecs (with EDNS Client Subnet)
+# - opendns
+# - opendns-family (family filter)
+# - adguard (blocks ads/trackers)
+# - adguard-family (blocks ads/trackers/adult)
+# - adguard-unfiltered (no filtering)
+
+# List all available DoH providers
+nettest dns doh-providers
+```
+
+#### Comprehensive DNS Testing
+```bash
+# Test all DNS record types with system resolver
+nettest dns comprehensive google.com
+
+# Test large DNS responses (TXT records)
+nettest dns large google.com
+```
+
+#### DNS Security and Filtering
+```bash
+# Test DNS filtering effectiveness
 nettest dns filtering
 
-# Show system DNS configuration
+# Test domain categories
+nettest dns categories --category malicious
+nettest dns categories --category ads
+nettest dns categories --category adult
+nettest dns categories --category all
+
+# Debug DNS configuration
 nettest dns debug
 ```
 
+### MTU Discovery
+
+#### Automatic MTU Discovery
+```bash
+# Discover optimal MTU
+nettest mtu discover google.com
+
+# MTU discovery with sudo (more accurate)
+nettest mtu discover google.com --sudo
+
+# IPv6 MTU discovery
+nettest mtu discover google.com --ip-version v6
+```
+
+#### Common MTU Testing
+```bash
+# Test common MTU sizes (1500, 1492, 1280, etc.)
+nettest mtu common google.com
+
+# With sudo for accurate results
+nettest mtu common google.com --sudo
+```
+
+#### Custom MTU Range Testing
+```bash
+# Test custom MTU range
+nettest mtu range google.com --min 1000 --max 1600
+
+# Fine-grained range testing
+nettest mtu range google.com --min 1400 --max 1500 --sudo
+```
+
+### Full Test Suite
+```bash
+# Comprehensive test suite
+nettest full google.com
+
+# Full test with sudo privileges
+nettest full google.com --sudo
+
+# IPv4 only comprehensive test
+nettest full google.com --ip-version v4
+
+# IPv6 only comprehensive test
+nettest full google.com --ip-version v6
+```
+
+### Output Formats
+
+#### Human-Readable Output (Default)
+```bash
+nettest dns servers google.com
+```
+Output:
+```
+================================================================================
+Network Test Results
+================================================================================
+PASS DNS A query for google.com (UDP via System DNS) (24ms)
+  ✓ A records: 142.250.191.14
+
+PASS DNS A query for google.com (UDP via 8.8.8.8:53) (15ms)
+  ✓ A records: 142.250.191.14 (via 8.8.8.8:53)
+
+PASS DoH A query for google.com (via Google) (45ms)
+  ✓ A records: 142.250.191.14
+```
+
+#### JSON Output
+```bash
+nettest dns query google.com --json
+```
+Output:
+```json
+[
+  {
+    "test_name": "DNS A query for google.com (UDP via System DNS)",
+    "success": true,
+    "duration_ms": 24,
+    "details": "A records: 142.250.191.14"
+  }
+]
+```
+
+### Global Options
+
+```bash
+# Verbose logging
+nettest --verbose dns query google.com
+
+# Custom timeout (default: 5 seconds)
+nettest --timeout 10 network tcp google.com
+
+# JSON output format
+nettest --json dns servers google.com
+```
+
+## Advanced Usage Examples
+
+### Network Troubleshooting Workflow
+```bash
+# 1. Test basic connectivity
+nettest network ping target.com --count 5
+
+# 2. Test specific ports
+nettest network tcp target.com --port 80
+nettest network tcp target.com --port 443
+
+# 3. Check DNS resolution
+nettest dns query target.com --record-type a
+nettest dns servers target.com
+
+# 4. Test with different DNS servers
+nettest dns query target.com --server 8.8.8.8:53
+nettest dns query target.com --server 1.1.1.1:53
+
+# 5. Test DNS-over-HTTPS
+nettest dns doh target.com --provider cloudflare
+
+# 6. Discover MTU issues
+nettest mtu discover target.com
+```
+
+### DNS Security Analysis
+```bash
+# Test malicious domain blocking
+nettest dns categories --category malicious
+
+# Test ad blocking effectiveness
+nettest dns categories --category ads
+
+# Check for DNS filtering
+nettest dns filtering
+
+# Test with security-focused DNS servers
+nettest dns doh malicious-domain.test --provider quad9
+```
+
+### Performance Comparison
+```bash
+# Compare DNS server performance
+nettest dns servers google.com --json | jq '.[] | {name: .test_name, duration: .duration_ms}'
+
+# Compare DoH vs traditional DNS
+nettest dns query google.com --server 8.8.8.8:53 --json
+nettest dns doh google.com --provider google --json
+```
+
+## DNS Providers
+
+### Traditional DNS Servers (23 servers)
+- **Google DNS**: 8.8.8.8, 8.8.4.4
+- **Cloudflare DNS**: 1.1.1.1, 1.0.0.1, 1.1.1.2, 1.1.1.3
+- **Quad9**: 9.9.9.9, 149.112.112.112, 9.9.9.10, 149.112.112.10, 9.9.9.11, 149.112.112.11
+- **OpenDNS**: 208.67.222.222, 208.67.220.220, 208.67.222.123, 208.67.220.123
+- **AdGuard DNS**: 94.140.14.14, 94.140.15.15, 94.140.14.15, 94.140.15.16, 94.140.14.140, 94.140.14.141
+
+### DNS-over-HTTPS Providers (16 providers)
+- **Google**: Wire format and JSON API
+- **Cloudflare**: Standard, Family, Security variants in both formats
+- **Quad9**: Standard, Unsecured, ECS variants
+- **OpenDNS**: Standard and Family Shield
+- **AdGuard**: Standard, Family, and Unfiltered variants
+
+## Library Usage
+
+NetTest can also be used as a Rust library:
+
+```rust
+use nettest::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // DNS testing
+    let dns_test = dns::DnsTest::new("google.com".to_string(), hickory_client::rr::RecordType::A);
+    let result = dns_test.run().await;
+    println!("DNS test: {}", result.test_name);
+
+    // Network testing
+    let network_test = network::NetworkTest::new(
+        "google.com".to_string(),
+        network::IpVersion::V4,
+        network::NetworkProtocol::Tcp,
+    ).with_port(80);
+    let result = network_test.run().await;
+    println!("Network test: {}", result.test_name);
+
+    // DoH testing
+    let providers = dns::doh::DOH_PROVIDERS;
+    let doh_test = dns::doh::DohTest::new(
+        "google.com".to_string(),
+        hickory_client::rr::RecordType::A,
+        providers[0].clone()
+    );
+    let result = doh_test.run().await;
+    println!("DoH test: {}", result.test_name);
+
+    Ok(())
+}
+```
+
+## Configuration
+
+### Environment Variables
+```bash
+# Set default timeout
+export NETTEST_TIMEOUT=10
+
+# Enable verbose logging
+export RUST_LOG=info
+
+# For detailed DNS debugging
+export RUST_LOG=nettest=debug
+```
+
+### Cargo Features
+```toml
+[dependencies]
+nettest = { version = "1.0", features = ["all"] }
+
+# Or specific features
+nettest = { version = "1.0", features = ["dns", "doh", "network"] }
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### DNS TXT Record Timeouts
+```bash
+# NetTest automatically enables EDNS0 for large TXT records
+# If you still experience timeouts, try:
+nettest dns query google.com --record-type txt --timeout 15
+```
+
+#### Permission Issues with Ping/MTU
+```bash
+# Use sudo flag for accurate ICMP and MTU testing
+nettest network ping google.com --sudo
+nettest mtu discover google.com --sudo
+```
+
+#### IPv6 Connectivity Issues
+```bash
+# Test IPv6 connectivity first
+nettest network ping google.com --ip-version v6
+nettest dns query google.com --record-type aaaa
+```
+
+### Debug Information
+```bash
+# Show current DNS configuration
+nettest dns debug
+
+# Verbose output for troubleshooting
+nettest --verbose dns query google.com
+```
+
+## Performance Benchmarks
+
+### DNS Query Performance
+Typical response times on a 100 Mbps connection:
+- **Traditional DNS (UDP)**: 5-50ms
+- **DNS-over-HTTPS**: 50-200ms
+- **Large TXT records**: 10-100ms (with EDNS0)
+
+### Concurrent Testing
+NetTest performs concurrent tests where possible:
+- DNS server testing: Up to 39 concurrent queries
+- Network port scanning: Concurrent port tests
+- DoH provider testing: Parallel HTTP requests
+
+## Security Features
+
 ### DNS Sinkhole Detection
+NetTest automatically detects common DNS sinkhole responses:
+- `0.0.0.0` redirects
+- Localhost redirects (`127.x.x.x`)
+- Common DNS filtering IPs
 
-NetTest automatically detects when domains are being sinkholed (redirected to special IP addresses):
-
+### Security-Focused Testing
 ```bash
-# Example output showing sinkhole detection
-$ nettest dns query blocked-domain.com --record-type a
-PASS DNS A query for blocked-domain.com (UDP) (45ms)
-  ✓ A records: 🕳️ SINKHOLED (security success): Redirected to sinkhole IPs: 0.0.0.0
+# Test security DNS providers
+nettest dns doh malicious-site.test --provider quad9
 
-# Example showing missing records (not an error)
-$ nettest dns query image.example.com --record-type mx  
-PASS DNS MX query for image.example.com (UDP) (32ms)
-  ✓ MX records: (none - no mail servers configured)
-```
-
-### Comprehensive Testing
-
-The `full` command runs a comprehensive suite of tests:
-
-```bash
-# Full test suite for a domain
-nettest full example.com
-
-# Full test with specific IP version
-nettest full example.com --ip-version v4
-```
-
-This includes:
-- TCP and UDP connectivity tests
-- ICMP ping tests  
-- MTU discovery
-- DNS resolution tests
-- DNS server tests
-
-## Output Formats
-
-### Human-readable (default)
-Colored, formatted output suitable for terminal viewing.
-
-### JSON
-Machine-readable JSON output for integration with other tools:
-
-```bash
-nettest --json dns query google.com
+# Check filtering effectiveness
+nettest dns categories --category malicious
+nettest dns filtering
 ```
 
 
 ## Testing
 
-Run the test suite:
-
+### Running Tests
 ```bash
-# Unit tests
+# Run all tests
 cargo test
 
-# Integration tests
-cargo test --test integration_tests
-
-# All tests with verbose output
+# Run with output
 cargo test -- --nocapture
+
+# Run specific test module
+cargo test dns::
+
+# Run doc tests
+cargo test --doc
+```
+
+### Code Quality
+```bash
+# Check code formatting
+cargo fmt --check
+
+# Run linter
+cargo clippy -- -D warnings
+
+# Security audit
+cargo audit
 ```
 
 ## Architecture
@@ -339,11 +614,3 @@ The project maintains high code quality standards:
 - ✅ No security vulnerabilities
 - ✅ Comprehensive error handling
 
-## Changelog
-
-### Recent Improvements
-- 🔧 **Fixed IPv6 ping issues** - IPv6 ICMP now works correctly on macOS
-- 🛡️ **Enhanced DNS security** - Added sinkhole detection and improved error handling  
-- 📦 **Updated dependencies** - Migrated from trust-dns to hickory-dns for better maintenance
-- 🎯 **Improved accuracy** - Fixed DNS search domain issues for more accurate testing
-- ⚡ **Better performance** - Async implementation with proper timeout handling

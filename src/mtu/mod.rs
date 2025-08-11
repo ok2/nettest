@@ -1,8 +1,70 @@
+//! MTU (Maximum Transmission Unit) discovery and testing module.
+//!
+//! This module provides comprehensive MTU discovery capabilities using binary search
+//! algorithms and common MTU size testing. It supports both IPv4 and IPv6 with
+//! optional sudo privileges for more accurate ICMP-based testing.
+//!
+//! # Examples
+//!
+//! ## Basic MTU Discovery
+//! ```rust
+//! use nettest::mtu::MtuDiscovery;
+//! use nettest::network::IpVersion;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let discovery = MtuDiscovery::new("google.com".to_string(), IpVersion::V4);
+//!     let result = discovery.discover().await;
+//!     
+//!     if result.success {
+//!         println!("MTU discovery result: {}", result.details);
+//!     } else {
+//!         println!("MTU discovery failed: {:?}", result.error);
+//!     }
+//! }
+//! ```
+//!
+//! ## Custom MTU Range Testing
+//! ```rust
+//! use nettest::mtu::MtuDiscovery;
+//! use nettest::network::IpVersion;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let discovery = MtuDiscovery::new("cloudflare.com".to_string(), IpVersion::V4)
+//!         .with_range(1000, 1600)
+//!         .with_sudo(true);
+//!     
+//!     let result = discovery.discover().await;
+//!     println!("Custom range MTU discovery: {}", result.test_name);
+//! }
+//! ```
+
 use crate::network::IpVersion;
 use crate::utils::{measure_time, NetworkError, Result, TestResult};
 use std::net::{IpAddr, ToSocketAddrs};
 use std::time::Duration;
 
+/// MTU discovery configuration and execution.
+///
+/// `MtuDiscovery` provides a builder-pattern API for configuring and running MTU discovery
+/// tests using binary search algorithms. It supports custom MTU ranges, timeout settings,
+/// and optional sudo privileges for more accurate results.
+///
+/// # Examples
+/// ```rust
+/// use nettest::mtu::MtuDiscovery;
+/// use nettest::network::IpVersion;
+/// use std::time::Duration;
+///
+/// let discovery = MtuDiscovery::new("example.com".to_string(), IpVersion::V4)
+///     .with_range(1200, 1600)
+///     .with_sudo(false);
+///
+/// assert_eq!(discovery.target, "example.com");
+/// assert_eq!(discovery.min_mtu, 1200);
+/// assert_eq!(discovery.max_mtu, 1600);
+/// ```
 pub struct MtuDiscovery {
     pub target: String,
     pub ip_version: IpVersion,
@@ -26,6 +88,30 @@ impl Default for MtuDiscovery {
 }
 
 impl MtuDiscovery {
+    /// Creates a new MTU discovery with default settings.
+    ///
+    /// Default settings:
+    /// - Timeout: 5 seconds
+    /// - MTU range: 68-1500 bytes (IPv4), 1280-1500 bytes (IPv6)
+    /// - Sudo: disabled
+    ///
+    /// # Arguments
+    /// * `target` - The target hostname or IP address
+    /// * `ip_version` - The IP version to use for testing
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::mtu::MtuDiscovery;
+    /// use nettest::network::IpVersion;
+    ///
+    /// let ipv4_discovery = MtuDiscovery::new("google.com".to_string(), IpVersion::V4);
+    /// let ipv6_discovery = MtuDiscovery::new("google.com".to_string(), IpVersion::V6);
+    ///
+    /// assert_eq!(ipv4_discovery.min_mtu, 68);
+    /// assert_eq!(ipv4_discovery.max_mtu, 1500);
+    /// assert_eq!(ipv4_discovery.timeout.as_secs(), 5);
+    /// assert_eq!(ipv4_discovery.use_sudo, false);
+    /// ```
     pub fn new(target: String, ip_version: IpVersion) -> Self {
         Self {
             target,
@@ -34,12 +120,49 @@ impl MtuDiscovery {
         }
     }
 
+    /// Sets a custom MTU range for discovery.
+    ///
+    /// # Arguments
+    /// * `min_mtu` - Minimum MTU size to test (bytes)
+    /// * `max_mtu` - Maximum MTU size to test (bytes)
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::mtu::MtuDiscovery;
+    /// use nettest::network::IpVersion;
+    ///
+    /// let discovery = MtuDiscovery::new("example.com".to_string(), IpVersion::V4)
+    ///     .with_range(1000, 2000);
+    ///
+    /// assert_eq!(discovery.min_mtu, 1000);
+    /// assert_eq!(discovery.max_mtu, 2000);
+    /// ```
     pub fn with_range(mut self, min_mtu: u16, max_mtu: u16) -> Self {
         self.min_mtu = min_mtu;
         self.max_mtu = max_mtu;
         self
     }
 
+    /// Enables or disables sudo privileges for MTU testing.
+    ///
+    /// Using sudo can provide more accurate results but requires password prompt.
+    ///
+    /// # Arguments
+    /// * `use_sudo` - Whether to use sudo for ping commands
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::mtu::MtuDiscovery;
+    /// use nettest::network::IpVersion;
+    ///
+    /// let discovery_with_sudo = MtuDiscovery::new("example.com".to_string(), IpVersion::V4)
+    ///     .with_sudo(true);
+    /// let discovery_without_sudo = MtuDiscovery::new("example.com".to_string(), IpVersion::V4)
+    ///     .with_sudo(false);
+    ///
+    /// assert_eq!(discovery_with_sudo.use_sudo, true);
+    /// assert_eq!(discovery_without_sudo.use_sudo, false);
+    /// ```
     pub fn with_sudo(mut self, use_sudo: bool) -> Self {
         self.use_sudo = use_sudo;
         self
@@ -262,6 +385,48 @@ impl MtuDiscovery {
     }
 }
 
+/// Tests common MTU sizes for a target.
+///
+/// This function tests a set of commonly used MTU sizes to identify which ones work
+/// with the target. This is useful for quickly identifying MTU-related connectivity issues.
+///
+/// Common MTU sizes tested:
+/// - 68: Minimum IPv4 MTU
+/// - 576: Common dialup/low-bandwidth MTU
+/// - 1280: Minimum IPv6 MTU
+/// - 1492: Common `PPPoE` MTU
+/// - 1500: Ethernet standard MTU
+/// - 4464: Token Ring jumbo frame
+/// - 9000: Jumbo frame MTU
+///
+/// # Arguments
+/// * `target` - The target hostname or IP address
+/// * `ip_version` - The IP version to use for testing
+/// * `use_sudo` - Whether to use sudo for more accurate results
+///
+/// # Returns
+/// A vector of `TestResult` containing results for each MTU size tested
+///
+/// # Examples
+/// ```rust
+/// use nettest::mtu::test_common_mtu_sizes;
+/// use nettest::network::IpVersion;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let results = test_common_mtu_sizes("google.com", IpVersion::V4, false).await;
+///     
+///     // Should test multiple common MTU sizes
+///     assert!(results.len() >= 5);
+///     
+///     let working_mtus: Vec<_> = results.iter()
+///         .filter(|r| r.success)
+///         .map(|r| &r.test_name)
+///         .collect();
+///     
+///     println!("Working MTU sizes: {:?}", working_mtus);
+/// }
+/// ```
 pub async fn test_common_mtu_sizes(
     target: &str,
     ip_version: IpVersion,

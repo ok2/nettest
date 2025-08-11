@@ -1,3 +1,44 @@
+//! DNS-over-HTTPS (`DoH`) testing module.
+//!
+//! This module provides comprehensive DNS-over-HTTPS testing capabilities with support for:
+//! - 16 `DoH` providers including Google, Cloudflare, Quad9, OpenDNS, and `AdGuard`
+//! - Both JSON and Wire format protocols as defined in RFC 8484
+//! - Automatic format detection and provider-specific optimizations
+//! - Security-focused providers with built-in domain filtering
+//!
+//! # Examples
+//!
+//! ## Basic `DoH` Query
+//! ```rust
+//! use nettest::dns::doh::{DohTest, DOH_PROVIDERS};
+//! use hickory_client::rr::RecordType;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let provider = DOH_PROVIDERS[0].clone(); // Google DoH
+//!     let test = DohTest::new("google.com".to_string(), RecordType::A, provider);
+//!     let result = test.run().await;
+//!     
+//!     if result.success {
+//!         println!("DoH query successful: {}", result.details);
+//!     }
+//! }
+//! ```
+//!
+//! ## Testing All `DoH` Providers
+//! ```rust
+//! use nettest::dns::doh::test_doh_providers;
+//! use hickory_client::rr::RecordType;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let results = test_doh_providers("example.com", RecordType::A).await;
+//!     
+//!     let successful = results.iter().filter(|r| r.success).count();
+//!     println!("DoH providers: {}/{} successful", successful, results.len());
+//! }
+//! ```
+
 use crate::utils::{measure_time, NetworkError, Result, TestResult};
 use hickory_client::op::{Message, MessageType, OpCode, Query};
 use hickory_client::rr::{Name, RecordType};
@@ -6,6 +47,27 @@ use serde_json::Value;
 use std::str::FromStr;
 use std::time::Duration;
 
+/// DNS-over-HTTPS test configuration.
+///
+/// Represents a configured `DoH` test with a specific provider, domain, and record type.
+/// Supports both JSON and Wire format protocols as defined in RFC 8484.
+///
+/// # Examples
+/// ```rust
+/// use nettest::dns::doh::{DohTest, DohProvider, DohFormat};
+/// use hickory_client::rr::RecordType;
+/// use std::time::Duration;
+///
+/// let provider = DohProvider {
+///     name: "Example",
+///     url: "https://dns.example.com/dns-query",
+///     description: "Example DoH provider",
+///     format: DohFormat::WireFormat,
+/// };
+///
+/// let test = DohTest::new("google.com".to_string(), RecordType::A, provider)
+///     .with_timeout(Duration::from_secs(10));
+/// ```
 #[derive(Debug, Clone)]
 pub struct DohTest {
     pub domain: String,
@@ -14,6 +76,25 @@ pub struct DohTest {
     pub timeout: Duration,
 }
 
+/// DNS-over-HTTPS provider configuration.
+///
+/// Contains all necessary information to perform `DoH` queries against a specific provider,
+/// including URL, format type, and descriptive information.
+///
+/// # Examples
+/// ```rust
+/// use nettest::dns::doh::{DohProvider, DohFormat};
+///
+/// let provider = DohProvider {
+///     name: "Cloudflare",
+///     url: "https://1.1.1.1/dns-query",
+///     description: "Cloudflare DNS Primary (1.1.1.1)",
+///     format: DohFormat::WireFormat,
+/// };
+///
+/// assert_eq!(provider.name, "Cloudflare");
+/// assert!(matches!(provider.format, DohFormat::WireFormat));
+/// ```
 #[derive(Debug, Clone)]
 pub struct DohProvider {
     pub name: &'static str,
@@ -22,6 +103,25 @@ pub struct DohProvider {
     pub format: DohFormat,
 }
 
+/// DNS-over-HTTPS message format.
+///
+/// `DoH` supports two main formats:
+/// - **`WireFormat`**: Binary DNS packets (RFC 8484 standard) - supported by most providers
+/// - **`JSON`**: JSON-based queries - Google and Cloudflare specific format
+///
+/// # Examples
+/// ```rust
+/// use nettest::dns::doh::DohFormat;
+///
+/// let wire_format = DohFormat::WireFormat;
+/// let json_format = DohFormat::Json;
+///
+/// // Most DoH providers use wire format as it's the RFC standard
+/// match wire_format {
+///     DohFormat::WireFormat => println!("Using RFC 8484 binary format"),
+///     DohFormat::Json => println!("Using provider-specific JSON format"),
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub enum DohFormat {
     Json,       // Google, Cloudflare style
@@ -136,6 +236,25 @@ pub const DOH_PROVIDERS: &[DohProvider] = &[
 ];
 
 impl DohTest {
+    /// Creates a new `DoH` test with the specified configuration.
+    ///
+    /// # Arguments
+    /// * `domain` - The domain name to query
+    /// * `record_type` - The DNS record type to query
+    /// * `provider` - The `DoH` provider to use
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::dns::doh::{DohTest, DOH_PROVIDERS};
+    /// use hickory_client::rr::RecordType;
+    ///
+    /// let provider = DOH_PROVIDERS[0].clone(); // Google DoH provider
+    /// let test = DohTest::new("google.com".to_string(), RecordType::A, provider);
+    ///
+    /// assert_eq!(test.domain, "google.com");
+    /// assert_eq!(test.record_type, RecordType::A);
+    /// assert_eq!(test.timeout.as_secs(), 10);
+    /// ```
     pub fn new(domain: String, record_type: RecordType, provider: DohProvider) -> Self {
         Self {
             domain,
@@ -145,6 +264,23 @@ impl DohTest {
         }
     }
 
+    /// Sets a custom timeout for the `DoH` query.
+    ///
+    /// # Arguments  
+    /// * `timeout` - Query timeout duration
+    ///
+    /// # Examples
+    /// ```rust
+    /// use nettest::dns::doh::{DohTest, DOH_PROVIDERS};
+    /// use hickory_client::rr::RecordType;
+    /// use std::time::Duration;
+    ///
+    /// let provider = DOH_PROVIDERS[0].clone();
+    /// let test = DohTest::new("example.com".to_string(), RecordType::A, provider)
+    ///     .with_timeout(Duration::from_secs(15));
+    ///     
+    /// assert_eq!(test.timeout.as_secs(), 15);
+    /// ```
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
@@ -355,6 +491,42 @@ impl DohTest {
     }
 }
 
+/// Tests a domain against all available `DoH` providers.
+///
+/// This function performs DNS-over-HTTPS queries using all 16 available providers,
+/// including Google, Cloudflare, Quad9, OpenDNS, and `AdGuard` variants with both
+/// JSON and Wire format support.
+///
+/// # Arguments
+/// * `domain` - The domain name to test
+/// * `record_type` - The DNS record type to query
+///
+/// # Returns
+/// A vector of `TestResult` containing results from all `DoH` providers
+///
+/// # Examples
+/// ```rust
+/// use nettest::dns::doh::test_doh_providers;
+/// use hickory_client::rr::RecordType;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let results = test_doh_providers("google.com", RecordType::A).await;
+///     
+///     // Should have results from all 16 DoH providers
+///     assert!(results.len() >= 16);
+///     
+///     // Count successful queries
+///     let successful = results.iter().filter(|r| r.success).count();
+///     let total = results.len();
+///     println!("DoH providers: {}/{} successful", successful, total);
+///     
+///     // Check that we have both wire format and JSON providers
+///     let has_wire = results.iter().any(|r| r.test_name.contains("Google") && !r.test_name.contains("JSON"));
+///     let has_json = results.iter().any(|r| r.test_name.contains("Google-JSON"));
+///     assert!(has_wire && has_json);
+/// }
+/// ```
 pub async fn test_doh_providers(domain: &str, record_type: RecordType) -> Vec<TestResult> {
     let mut results = Vec::new();
 

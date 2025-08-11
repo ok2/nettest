@@ -4,11 +4,25 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.70"
 authors = ["Network Test Tool"]
-description = "A comprehensive network connectivity and DNS testing CLI tool"
+description = "A comprehensive network connectivity and DNS testing CLI tool with DoH support, MTU discovery, and security analysis"
 license = "WTFPL"
 repository = "https://github.com/example/nettest"
-keywords = ["network", "dns", "testing", "connectivity", "cli"]
-categories = ["command-line-utilities", "network-programming"]
+homepage = "https://github.com/example/nettest"
+documentation = "https://docs.rs/nettest"
+readme = "README.md"
+keywords = ["network", "dns", "testing", "connectivity", "doh"]
+categories = ["command-line-utilities", "network-programming", "api-bindings"]
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [[bin]]
 name = "nettest"
