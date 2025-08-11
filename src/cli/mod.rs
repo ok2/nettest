@@ -113,6 +113,20 @@ pub enum DnsCommands {
     Comprehensive { domain: String },
     #[command(about = "Test large DNS queries")]
     Large { domain: String },
+    #[command(about = "Test DNS-over-HTTPS (DoH) providers")]
+    Doh {
+        domain: String,
+        #[arg(
+            short,
+            long,
+            help = "DoH provider name (google, google-json, cloudflare, cloudflare-family, cloudflare-security, cloudflare-json, cloudflare-family-json, cloudflare-security-json, quad9, quad9-unsecured, quad9-ecs, opendns, opendns-family, adguard, adguard-family, adguard-unfiltered)"
+        )]
+        provider: Option<String>,
+        #[arg(short = 'r', long, value_enum, default_value = "a")]
+        record_type: RecordTypeArg,
+    },
+    #[command(about = "List available DoH providers")]
+    DohProviders,
 }
 
 #[derive(Subcommand)]

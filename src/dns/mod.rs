@@ -10,9 +10,11 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 pub mod categories;
+pub mod doh;
 pub mod queries;
 
 pub use categories::*;
+pub use doh::*;
 pub use queries::*;
 
 #[derive(Debug, Clone)]
@@ -614,18 +616,35 @@ pub async fn test_common_dns_servers(domain: &str, record_type: RecordType) -> V
     );
     results.push(system_result);
 
-    // Then test external DNS servers
+    // Test all traditional DNS servers (UDP/TCP)
     let servers = [
-        "8.8.8.8:53",         // Google Primary
-        "8.8.4.4:53",         // Google Secondary
-        "1.1.1.1:53",         // Cloudflare Primary
-        "1.0.0.1:53",         // Cloudflare Secondary
-        "9.9.9.9:53",         // Quad9 Primary
-        "149.112.112.112:53", // Quad9 Secondary
-        "208.67.222.222:53",  // OpenDNS Primary
-        "208.67.220.220:53",  // OpenDNS Secondary
-        "1.1.1.2:53",         // Cloudflare Family (blocks malware/adult)
-        "1.1.1.3:53",         // Cloudflare Family (blocks malware)
+        // Google DNS
+        "8.8.8.8:53", // Google Primary
+        "8.8.4.4:53", // Google Secondary
+        // Cloudflare DNS - All variants
+        "1.1.1.1:53", // Cloudflare Primary (standard)
+        "1.0.0.1:53", // Cloudflare Secondary (standard)
+        "1.1.1.2:53", // Cloudflare Family (blocks malware/adult)
+        "1.1.1.3:53", // Cloudflare Family (blocks malware only)
+        // Quad9 DNS - All variants
+        "9.9.9.9:53",         // Quad9 Primary (blocks malicious domains)
+        "149.112.112.112:53", // Quad9 Secondary (blocks malicious domains)
+        "9.9.9.10:53",        // Quad9 Unsecured (no blocking)
+        "149.112.112.10:53",  // Quad9 Unsecured Secondary (no blocking)
+        "9.9.9.11:53",        // Quad9 Secured + ECS (blocks malicious + EDNS)
+        "149.112.112.11:53",  // Quad9 Secured + ECS Secondary
+        // OpenDNS
+        "208.67.222.222:53", // OpenDNS Primary
+        "208.67.220.220:53", // OpenDNS Secondary
+        "208.67.222.123:53", // OpenDNS FamilyShield Primary
+        "208.67.220.123:53", // OpenDNS FamilyShield Secondary
+        // AdGuard DNS - All variants
+        "94.140.14.14:53",  // AdGuard DNS Primary (blocks ads/trackers)
+        "94.140.15.15:53",  // AdGuard DNS Secondary (blocks ads/trackers)
+        "94.140.14.15:53",  // AdGuard DNS Family Primary (blocks ads/trackers/adult)
+        "94.140.15.16:53",  // AdGuard DNS Family Secondary (blocks ads/trackers/adult)
+        "94.140.14.140:53", // AdGuard DNS Unfiltered Primary
+        "94.140.14.141:53", // AdGuard DNS Unfiltered Secondary
     ];
 
     for server_str in &servers {
@@ -634,6 +653,10 @@ pub async fn test_common_dns_servers(domain: &str, record_type: RecordType) -> V
             results.push(test.run().await);
         }
     }
+
+    // Add DNS-over-HTTPS tests (all available DoH providers)
+    let doh_results = crate::dns::doh::test_doh_providers(domain, record_type).await;
+    results.extend(doh_results);
 
     results
 }

@@ -15,8 +15,22 @@ pub async fn comprehensive_dns_test(domain: &str) -> Vec<TestResult> {
         RecordType::SOA,
     ];
 
+    // Test all record types using system DNS resolver
+    // This focuses on comprehensive record type analysis rather than server testing
     for record_type in &record_types {
         let test = DnsTest::new(domain.to_string(), *record_type);
+        results.push(test.run().await);
+    }
+
+    // Add a few key DoH tests for comparison (JSON-compatible providers only)
+    let key_doh_providers = [
+        &crate::dns::doh::DOH_PROVIDERS[0], // Google
+        &crate::dns::doh::DOH_PROVIDERS[1], // Cloudflare Primary
+    ];
+
+    for provider in key_doh_providers {
+        let test =
+            crate::dns::doh::DohTest::new(domain.to_string(), RecordType::A, provider.clone());
         results.push(test.run().await);
     }
 

@@ -184,6 +184,38 @@ async fn handle_dns_command(command: cli::DnsCommands, timeout: Duration) -> Vec
             dns::queries::comprehensive_dns_test(&domain).await
         }
         cli::DnsCommands::Large { domain } => dns::queries::test_large_dns_queries(&domain).await,
+        cli::DnsCommands::Doh {
+            domain,
+            provider,
+            record_type,
+        } => {
+            let mut results = Vec::new();
+            for rt in record_type.to_record_type() {
+                match &provider {
+                    Some(provider_name) => {
+                        if let Some(provider) = dns::doh::get_provider_by_name(provider_name) {
+                            let test = dns::doh::DohTest::new(domain.clone(), rt, provider.clone());
+                            results.push(test.run().await);
+                        } else {
+                            results.push(TestResult::new("DoH Provider Error".to_string()).failure(
+                                Duration::from_millis(0),
+                                NetworkError::Other(format!(
+                                    "Unknown DoH provider: {}. Available providers: google, google-json, cloudflare, cloudflare-family, cloudflare-security, cloudflare-json, cloudflare-family-json, cloudflare-security-json, quad9, quad9-unsecured, quad9-ecs, opendns, opendns-family, adguard, adguard-family, adguard-unfiltered",
+                                    provider_name
+                                )),
+                            ));
+                            break; // Don't repeat error for each record type
+                        }
+                    }
+                    None => {
+                        let provider_results = dns::doh::test_doh_providers(&domain, rt).await;
+                        results.extend(provider_results);
+                    }
+                }
+            }
+            results
+        }
+        cli::DnsCommands::DohProviders => dns::doh::list_doh_providers(),
     }
 }
 
