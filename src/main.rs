@@ -24,9 +24,11 @@ async fn main() {
         cli::Commands::Network { command } => handle_network_command(command, timeout).await,
         cli::Commands::Dns { command } => handle_dns_command(command, timeout).await,
         cli::Commands::Mtu { command } => handle_mtu_command(command, timeout).await,
-        cli::Commands::Full { target, ip_version } => {
-            handle_full_test(target, ip_version, timeout).await
-        }
+        cli::Commands::Full {
+            target,
+            ip_version,
+            sudo,
+        } => handle_full_test(target, ip_version, timeout, sudo).await,
     };
 
     if cli.json {
@@ -86,10 +88,12 @@ async fn handle_network_command(
             target,
             count,
             ip_version,
+            sudo,
         } => {
             let mut results = Vec::new();
             for version in ip_version.to_versions() {
-                let ping_results = network::ping_test(&target, version, count).await;
+                let ping_results =
+                    network::ping_test_with_sudo(&target, version, count, sudo).await;
                 results.extend(ping_results);
             }
             results
@@ -268,6 +272,7 @@ async fn handle_full_test(
     target: String,
     ip_version: cli::IpVersionArg,
     timeout: Duration,
+    sudo: bool,
 ) -> Vec<TestResult> {
     let versions = ip_version.to_versions();
     let total_tests = versions.len() * 10; // Rough estimate
@@ -303,7 +308,7 @@ async fn handle_full_test(
         pb.inc(1);
 
         // ICMP test
-        let ping_results = network::ping_test(&target, version, 3).await;
+        let ping_results = network::ping_test_with_sudo(&target, version, 3, sudo).await;
         all_results.extend(ping_results);
         pb.inc(3);
 
@@ -314,7 +319,7 @@ async fn handle_full_test(
         pb.inc(1);
 
         // Common MTU sizes
-        let mtu_common = mtu::test_common_mtu_sizes(&target, version, false).await;
+        let mtu_common = mtu::test_common_mtu_sizes(&target, version, sudo).await;
         all_results.extend(mtu_common);
         pb.inc(1);
     }

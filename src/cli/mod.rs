@@ -41,6 +41,11 @@ pub enum Commands {
         target: String,
         #[arg(short, long, value_enum, default_value = "both")]
         ip_version: IpVersionArg,
+        #[arg(
+            long,
+            help = "Use sudo for more accurate ICMP and MTU testing (requires interactive password prompt)"
+        )]
+        sudo: bool,
     },
 }
 
@@ -69,6 +74,11 @@ pub enum NetworkCommands {
         count: u32,
         #[arg(short, long, value_enum, default_value = "both")]
         ip_version: IpVersionArg,
+        #[arg(
+            long,
+            help = "Use sudo for more accurate ICMP testing (requires interactive password prompt)"
+        )]
+        sudo: bool,
     },
     #[command(about = "Test common ports")]
     Ports {

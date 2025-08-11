@@ -5,6 +5,10 @@ use tokio::time::Duration;
 
 impl NetworkTest {
     pub async fn test_icmp(&self) -> Result<String> {
+        self.test_icmp_with_sudo(false).await
+    }
+
+    pub async fn test_icmp_with_sudo(&self, use_sudo: bool) -> Result<String> {
         // Resolve the target to an IP address first
         let target_ip = self.resolve_target_to_ip().await?;
 
@@ -13,7 +17,13 @@ impl NetworkTest {
             IpVersion::V6 => "ping6",
         };
 
-        let mut cmd = tokio::process::Command::new(ping_cmd);
+        let mut cmd = if use_sudo {
+            let mut sudo_cmd = tokio::process::Command::new("sudo");
+            sudo_cmd.arg(ping_cmd);
+            sudo_cmd
+        } else {
+            tokio::process::Command::new(ping_cmd)
+        };
         cmd.args(&["-c", "1"]);
 
         // Add timeout for IPv4 ping, but not for ping6 on macOS (it uses different syntax)
@@ -103,13 +113,47 @@ impl NetworkTest {
 }
 
 pub async fn ping_test(target: &str, ip_version: IpVersion, count: u32) -> Vec<TestResult> {
+    ping_test_with_sudo(target, ip_version, count, false).await
+}
+
+pub async fn ping_test_with_sudo(
+    target: &str,
+    ip_version: IpVersion,
+    count: u32,
+    use_sudo: bool,
+) -> Vec<TestResult> {
     let mut results = Vec::new();
 
     for i in 0..count {
         let test = NetworkTest::new(target.to_string(), ip_version, super::NetworkProtocol::Icmp);
 
-        let mut result = test.run().await;
-        result.test_name = format!("ICMP ping #{} to {} ({:?})", i + 1, target, ip_version);
+        let result = if use_sudo {
+            let start = std::time::Instant::now();
+            let icmp_result = test.test_icmp_with_sudo(use_sudo).await;
+            let duration = start.elapsed();
+
+            match icmp_result {
+                Ok(details) => crate::utils::TestResult::new(format!(
+                    "ICMP ping #{} to {} ({:?})",
+                    i + 1,
+                    target,
+                    ip_version
+                ))
+                .success(duration, details),
+                Err(error) => crate::utils::TestResult::new(format!(
+                    "ICMP ping #{} to {} ({:?})",
+                    i + 1,
+                    target,
+                    ip_version
+                ))
+                .failure(duration, error),
+            }
+        } else {
+            let mut result = test.run().await;
+            result.test_name = format!("ICMP ping #{} to {} ({:?})", i + 1, target, ip_version);
+            result
+        };
+
         results.push(result);
 
         if i < count - 1 {
