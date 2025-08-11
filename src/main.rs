@@ -415,3 +415,32 @@ fn print_results_json(results: &[TestResult]) {
 
     println!("{}", serde_json::to_string_pretty(&json_results).unwrap());
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_construction() {
+        // Test that CLI can be constructed without panicking
+        // This is a basic smoke test for the CLI interface
+        use clap::Parser;
+
+        // Test help command doesn't panic
+        let result = std::panic::catch_unwind(|| {
+            let _ = cli::Cli::try_parse_from(&["nettest", "--help"]);
+        });
+        assert!(result.is_ok(), "CLI help command should not panic");
+    }
+
+    #[test]
+    fn test_version_command() {
+        // Test version command
+        use clap::Parser;
+
+        let result = std::panic::catch_unwind(|| {
+            let _ = cli::Cli::try_parse_from(&["nettest", "--version"]);
+        });
+        assert!(result.is_ok(), "CLI version command should not panic");
+    }
+}
