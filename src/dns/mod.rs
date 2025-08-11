@@ -340,6 +340,15 @@ impl DnsTest {
             }
         };
 
+        // Debug: Show original configuration
+        log::info!(
+            "Original DNS config: {} name servers",
+            config.name_servers().len()
+        );
+        for ns in config.name_servers() {
+            log::info!("  Name server: {}", ns.socket_addr);
+        }
+
         // Clear search domains to prevent automatic domain expansion during DNS testing
         // This ensures we query the exact domain name provided
         // Create a new config with the same name servers but no search domains
@@ -349,8 +358,22 @@ impl DnsTest {
         }
         config = clean_config;
 
-        // Ensure we don't use search domains
+        // Ensure we don't use search domains and optimize for large responses
         opts.ndots = 0;
+        opts.timeout = self.timeout;
+
+        // Enable more retries for reliability
+        opts.attempts = 3;
+
+        // Enable EDNS0 for extended DNS features (large responses)
+        opts.edns0 = true;
+
+        log::info!(
+            "DNS resolver options: timeout={}s, edns0={}, attempts={}",
+            opts.timeout.as_secs(),
+            opts.edns0,
+            opts.attempts
+        );
 
         let resolver = TokioAsyncResolver::tokio(config, opts);
 
@@ -391,13 +414,31 @@ impl DnsTest {
                     )
                 }
                 RecordType::TXT => {
+                    log::info!("Starting TXT lookup for domain: {}", self.domain);
                     let lookup_result = resolver.txt_lookup(name.clone()).await;
+                    log::info!("TXT lookup completed for domain: {}", self.domain);
+
+                    match &lookup_result {
+                        Ok(lookup) => {
+                            let count = lookup.iter().count();
+                            log::info!(
+                                "TXT lookup success: found {} records for {}",
+                                count,
+                                self.domain
+                            );
+                        }
+                        Err(e) => {
+                            log::warn!("TXT lookup error for {}: {}", self.domain, e);
+                        }
+                    }
+
                     handle_dns_lookup_result(
                         lookup_result,
                         "TXT",
                         |lookup| {
                             let records: Vec<String> =
                                 lookup.iter().map(|txt| txt.to_string()).collect();
+                            log::info!("TXT records for {}: {} total", self.domain, records.len());
                             format!("TXT records: {}", records.join(", "))
                         },
                         "(none - no text records found)",
@@ -504,7 +545,20 @@ impl DnsTest {
             server,
             hickory_resolver::config::Protocol::Udp,
         ));
-        let opts = ResolverOpts::default();
+
+        // Use the same optimized options as system resolver
+        let mut opts = ResolverOpts::default();
+        opts.ndots = 0;
+        opts.timeout = self.timeout;
+        opts.attempts = 3;
+        opts.edns0 = true; // Critical: Enable EDNS0 for large TXT records
+
+        log::info!(
+            "Specific server DNS resolver options: timeout={}s, edns0={}, attempts={}",
+            opts.timeout.as_secs(),
+            opts.edns0,
+            opts.attempts
+        );
 
         let resolver = TokioAsyncResolver::tokio(config, opts);
 
@@ -528,6 +582,14 @@ impl DnsTest {
                         .map_err(|e| format!("AAAA lookup failed: {}", e))?;
                     let ips: Vec<String> = lookup.iter().map(|ip| ip.to_string()).collect();
                     Ok(format!("AAAA records: {}", ips.join(", ")))
+                }
+                RecordType::TXT => {
+                    let lookup = resolver
+                        .txt_lookup(name.clone())
+                        .await
+                        .map_err(|e| format!("TXT lookup failed: {}", e))?;
+                    let records: Vec<String> = lookup.iter().map(|txt| txt.to_string()).collect();
+                    Ok(format!("TXT records: {}", records.join(", ")))
                 }
                 _ => {
                     let lookup = resolver
